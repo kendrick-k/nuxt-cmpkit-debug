@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { cookieNames, formatBytes, isLocalHost, maskKey, splitByCmpkit, summarizeResources, clampPosition, parsePosition } from '../src/runtime/utils.ts'
+import { cookieNames, formatBytes, isLocalHost, maskKey, splitByCmpkit, summarizeResources, clampPosition, parsePosition, cookieClearStrings, healthLevel } from '../src/runtime/utils.ts'
 
 test('isLocalHost accepts loopback hosts only', () => {
   for (const h of ['localhost', 'LOCALHOST', '127.0.0.1', '[::1]', 'app.localhost']) assert.equal(isLocalHost(h), true, h)
@@ -50,4 +50,20 @@ test('clampPosition keeps the button inside the viewport', () => {
 test('parsePosition accepts two finite numbers only', () => {
   assert.deepEqual(parsePosition('{"x":10,"y":20}'), { x: 10, y: 20 })
   for (const bad of [null, '', 'nope', '{"x":"1","y":2}', '{"x":1}', '{"x":null,"y":1}']) assert.equal(parsePosition(bad), null, String(bad))
+})
+
+test('healthLevel: bad beats warn beats ok', () => {
+  assert.equal(healthLevel(0, 0), 'ok')
+  assert.equal(healthLevel(0, 2), 'warn')
+  assert.equal(healthLevel(1, 2), 'bad')
+})
+
+test('cookieClearStrings expires on the host and its parent domains, not on localhost or an IP', () => {
+  assert.deepEqual(cookieClearStrings('a', 'localhost'), ['a=; Max-Age=0; path=/'])
+  assert.deepEqual(cookieClearStrings('a', '127.0.0.1'), ['a=; Max-Age=0; path=/'])
+  assert.deepEqual(cookieClearStrings('a', 'app.example.com'), [
+    'a=; Max-Age=0; path=/',
+    'a=; Max-Age=0; path=/; domain=app.example.com',
+    'a=; Max-Age=0; path=/; domain=example.com',
+  ])
 })

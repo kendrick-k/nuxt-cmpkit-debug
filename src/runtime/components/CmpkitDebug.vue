@@ -3,7 +3,7 @@
 // Performance API, cookies, localStorage, the public window.CMPKit API). It never sends anything anywhere.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRuntimeConfig } from '#imports'
-import { cookieNames, formatBytes, isLocalHost, maskKey, splitByCmpkit, summarizeResources, type OriginRow, clampPosition, parsePosition, type Point } from '../utils'
+import { cookieNames, formatBytes, isLocalHost, maskKey, splitByCmpkit, summarizeResources, type OriginRow, clampPosition, parsePosition, type Point, cookieClearStrings, healthLevel } from '../utils'
 
 type Tab = 'overview' | 'loaded' | 'consent' | 'storage'
 const tabs: { id: Tab, label: string }[] = [
@@ -119,15 +119,46 @@ function refresh() {
   }
 }
 
-const warnings = computed(() => {
+const problems = computed(() => {
   const list: string[] = []
   if (!widget.value.found) list.push('No CMPKit script tag found on this page.')
   if (widget.value.found > 1) list.push(`${widget.value.found} CMPKit script tags found: the widget is loaded more than once.`)
   if (widget.value.found && !widget.value.key.trim()) list.push('The script tag has an empty data-api-key.')
   if (widget.value.found && !widget.value.ready) list.push('window.CMPKit is not ready yet (script still loading, blocked or failed).')
+  return list
+})
+const notices = computed(() => {
+  const list: string[] = []
   if (cookies.value.other.length) list.push(`${cookies.value.other.length} other cookie(s) set (see the Storage tab). On localhost, every app on any port shares the same cookies, so many of them can come from other projects.`)
   return list
 })
+const warnings = computed(() => [...problems.value, ...notices.value])
+const level = computed(() => healthLevel(problems.value.length, notices.value.length))
+const allCookieCount = computed(() => cookies.value.cmpkit.length + cookies.value.other.length)
+const confirmAll = ref(false)
+let confirmTimer: ReturnType<typeof setTimeout> | undefined
+
+function clearCookie(name: string) {
+  for (const entry of cookieClearStrings(name, location.hostname)) document.cookie = entry
+}
+function resetCmpkitCookies() {
+  for (const name of cookieNames(document.cookie)) if (name.toLowerCase().startsWith('cmpkit')) clearCookie(name)
+  try {
+    for (const k of Object.keys(localStorage)) if (k.toLowerCase().startsWith('cmpkit')) localStorage.removeItem(k)
+  } catch { /* storage blocked */ }
+  location.reload()
+}
+// Two clicks, no browser dialog: the first arms the button for 4 seconds, the second deletes.
+function resetAllCookies() {
+  if (!confirmAll.value) {
+    confirmAll.value = true
+    confirmTimer = setTimeout(() => { confirmAll.value = false }, 4000)
+    return
+  }
+  if (confirmTimer) clearTimeout(confirmTimer)
+  for (const name of cookieNames(document.cookie)) clearCookie(name)
+  location.reload()
+}
 
 const consentRows = computed(() => Object.entries(consent.value ?? {}).map(([name, value]) => ({ name, value: typeof value === 'boolean' ? (value ? 'granted' : 'denied') : JSON.stringify(value) })))
 
@@ -152,7 +183,7 @@ onMounted(() => {
   }
   window.addEventListener('cmpkit:consent-changed', onChange)
   refresh()
-  timer = setInterval(() => { if (open.value) refresh() }, 2000)
+  timer = setInterval(() => { refresh() }, 3000)
 })
 
 onBeforeUnmount(() => {
@@ -238,11 +269,16 @@ function resetConsent() {
         <ul class="log"><li v-for="c in cookies.other" :key="c" class="mono">{{ c }}</li><li v-if="!cookies.other.length" class="hint">None.</li></ul>
         <p class="hint">localStorage keys</p>
         <ul class="log"><li v-for="k in stored" :key="k" class="mono">{{ k }}</li><li v-if="!stored.length" class="hint">None.</li></ul>
+        <div class="actions">
+          <button type="button" :disabled="!cookies.cmpkit.length && !stored.length" @click="resetCmpkitCookies">Reset CMPKit cookies</button>
+          <button type="button" :class="{ danger: confirmAll }" :disabled="!allCookieCount" @click="resetAllCookies">{{ confirmAll ? `Click again to delete ${allCookieCount}` : 'Reset all cookies' }}</button>
+        </div>
+        <p class="hint">On localhost, “all cookies” also signs you out of your other local apps.</p>
       </div>
     </section>
 
-    <button type="button" ref="fabEl" class="fab" :class="{ dragging }" :aria-expanded="open" aria-label="Toggle the CMPKit debug panel" @click="toggle" @pointerdown="onPointerDown" @pointermove="onPointerMove" @pointerup="onPointerUp" @pointercancel="onPointerUp">
-      CMP<span v-if="warnings.length" class="dot" aria-hidden="true" />
+    <button type="button" ref="fabEl" class="fab" :class="[`lvl-${level}`, { dragging }]" :aria-expanded="open" aria-label="Toggle the CMPKit debug panel" @click="toggle" @pointerdown="onPointerDown" @pointermove="onPointerMove" @pointerup="onPointerUp" @pointercancel="onPointerUp">
+      CMP
     </button>
   </div>
 </template>
@@ -254,7 +290,8 @@ function resetConsent() {
 .reset { cursor: pointer; border: 1px solid #ffffff33; background: none; color: #e8e6e1; border-radius: 999px; padding: 2px 8px; font: inherit; font-size: 10px; white-space: nowrap; }
 .is-left { left: 16px; } .is-right { right: 16px; }
 .fab { position: relative; cursor: grab; touch-action: none; user-select: none; border: 1px solid #ffffff26; background: #1b1a17f2; color: #e8e6e1; border-radius: 999px; padding: 8px 14px; font: 600 11px/1 system-ui, sans-serif; letter-spacing: .14em; white-space: nowrap; }
-.dot { position: absolute; top: -2px; right: -2px; width: 9px; height: 9px; border-radius: 50%; background: #c9a14a; }
+.fab.lvl-ok { background: #3f6140; border-color: #6b9168; color: #fff; } .fab.lvl-warn { background: #8a6530; border-color: #c9a14a; color: #fff; } .fab.lvl-bad { background: #9e3b2f; border-color: #c46a5c; color: #fff; }
+.actions button:disabled { opacity: .45; cursor: default; } .actions button.danger { border-color: #c46a5c; color: #f0b3a9; }
 .panel { width: min(380px, calc(100vw - 32px)); max-height: min(70vh, 560px); display: flex; flex-direction: column; position: absolute; background: #1b1a17f7; border: 1px solid #ffffff26; border-radius: 14px; box-shadow: 0 18px 50px #0008; overflow: hidden; }
 header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #ffffff1a; }
 header strong { flex: 1; white-space: nowrap; }

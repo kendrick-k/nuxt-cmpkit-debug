@@ -91,3 +91,22 @@ export function parsePosition(raw: string | null): Point | null {
     return null
   }
 }
+
+export type Level = 'ok' | 'warn' | 'bad'
+
+/** Overall health of the setup: `bad` when something is broken, `warn` for notices only, `ok` otherwise. */
+export function healthLevel(problems: number, notices: number): Level {
+  return problems > 0 ? 'bad' : notices > 0 ? 'warn' : 'ok'
+}
+
+/** `document.cookie` assignments that expire a cookie on this host and on its parent domains. */
+export function cookieClearStrings(name: string, hostname: string): string[] {
+  const base = `${name}=; Max-Age=0; path=/`
+  const out = [base]
+  const parts = hostname.split('.')
+  const isIp = /^\d+(\.\d+){3}$/.test(hostname) || hostname.includes(':')
+  if (hostname !== 'localhost' && !isIp && parts.length > 1) {
+    for (let i = 0; i < parts.length - 1; i++) out.push(`${base}; domain=${parts.slice(i).join('.')}`)
+  }
+  return out
+}

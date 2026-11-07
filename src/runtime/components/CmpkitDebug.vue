@@ -125,7 +125,7 @@ const warnings = computed(() => {
   if (widget.value.found > 1) list.push(`${widget.value.found} CMPKit script tags found: the widget is loaded more than once.`)
   if (widget.value.found && !widget.value.key.trim()) list.push('The script tag has an empty data-api-key.')
   if (widget.value.found && !widget.value.ready) list.push('window.CMPKit is not ready yet (script still loading, blocked or failed).')
-  if (cookies.value.other.length) list.push(`${cookies.value.other.length} other cookie(s) set: check they respect the visitor's choice.`)
+  if (cookies.value.other.length) list.push(`${cookies.value.other.length} other cookie(s) set (see the Storage tab). On localhost, every app on any port shares the same cookies, so many of them can come from other projects.`)
   return list
 })
 

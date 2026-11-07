@@ -3,7 +3,7 @@
 // Performance API, cookies, localStorage, the public window.CMPKit API). It never sends anything anywhere.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRuntimeConfig } from '#imports'
-import { cookieNames, formatBytes, isLocalHost, maskKey, splitByCmpkit, summarizeResources, type OriginRow } from '../utils'
+import { cookieNames, formatBytes, isLocalHost, maskKey, splitByCmpkit, summarizeResources, type OriginRow, clampPosition, parsePosition, type Point } from '../utils'
 
 type Tab = 'overview' | 'loaded' | 'consent' | 'storage'
 const tabs: { id: Tab, label: string }[] = [
@@ -14,6 +14,67 @@ const tabs: { id: Tab, label: string }[] = [
 ]
 
 const position = (useRuntimeConfig().public.cmpkitDebug as { position?: string } | undefined)?.position === 'right' ? 'right' : 'left'
+const STORAGE_KEY = 'nuxt-cmpkit-debug:position'
+const pos = ref<Point | null>(null)
+const dragging = ref(false)
+const fabEl = ref<HTMLButtonElement | null>(null)
+let drag: { startX: number, startY: number, originX: number, originY: number, moved: boolean } | null = null
+let suppressClick = false
+const viewport = () => ({ width: window.innerWidth, height: window.innerHeight })
+const style = computed(() => (pos.value ? { left: `${pos.value.x}px`, top: `${pos.value.y}px`, right: 'auto', bottom: 'auto' } : {}))
+const openDown = computed(() => !!pos.value && pos.value.y < window.innerHeight / 2)
+const alignRight = computed(() => (pos.value ? pos.value.x > window.innerWidth / 2 : position === 'right'))
+
+function loadPosition() {
+  try {
+    const saved = parsePosition(localStorage.getItem(STORAGE_KEY))
+    if (saved) pos.value = clampPosition(saved, { width: 64, height: 36 }, viewport())
+  } catch { /* storage blocked */ }
+}
+function savePosition() {
+  try {
+    if (pos.value) localStorage.setItem(STORAGE_KEY, JSON.stringify(pos.value))
+    else localStorage.removeItem(STORAGE_KEY)
+  } catch { /* storage blocked */ }
+}
+function resetPosition() {
+  pos.value = null
+  savePosition()
+}
+function onPointerDown(e: PointerEvent) {
+  const el = fabEl.value
+  if (!el) return
+  const rect = el.getBoundingClientRect()
+  drag = { startX: e.clientX, startY: e.clientY, originX: rect.left, originY: rect.top, moved: false }
+  try { el.setPointerCapture(e.pointerId) } catch { /* not supported */ }
+}
+function onPointerMove(e: PointerEvent) {
+  const el = fabEl.value
+  if (!drag || !el) return
+  const dx = e.clientX - drag.startX
+  const dy = e.clientY - drag.startY
+  if (!drag.moved && Math.hypot(dx, dy) < 4) return
+  drag.moved = true
+  dragging.value = true
+  const rect = el.getBoundingClientRect()
+  pos.value = clampPosition({ x: drag.originX + dx, y: drag.originY + dy }, { width: rect.width, height: rect.height }, viewport())
+}
+function onPointerUp() {
+  if (!drag) return
+  const moved = drag.moved
+  drag = null
+  dragging.value = false
+  if (!moved) return
+  savePosition()
+  suppressClick = true
+  setTimeout(() => { suppressClick = false }, 0)
+}
+function onResize() {
+  if (!pos.value || !fabEl.value) return
+  const rect = fabEl.value.getBoundingClientRect()
+  pos.value = clampPosition(pos.value, { width: rect.width, height: rect.height }, viewport())
+}
+
 const visible = ref(false)
 const open = ref(false)
 const tab = ref<Tab>('overview')
@@ -77,6 +138,8 @@ let onChange: ((e: Event) => void) | undefined
 onMounted(() => {
   if (!import.meta.dev || !isLocalHost(location.hostname)) return
   visible.value = true
+  loadPosition()
+  window.addEventListener('resize', onResize)
   try {
     observer = new PerformanceObserver((list) => {
       for (const e of list.getEntries()) longTasks.value += e.duration
@@ -93,12 +156,14 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('resize', onResize)
   if (timer) clearInterval(timer)
   observer?.disconnect()
   if (onChange) window.removeEventListener('cmpkit:consent-changed', onChange)
 })
 
 function toggle() {
+  if (suppressClick) return
   open.value = !open.value
   if (open.value) refresh()
 }
@@ -117,11 +182,12 @@ function resetConsent() {
 </script>
 
 <template>
-  <div v-if="visible" class="cmpkit-debug" :class="`is-${position}`" data-cmpkit-debug>
-    <section v-if="open" class="panel" role="dialog" aria-label="CMPKit debug">
+  <div v-if="visible" class="cmpkit-debug" :class="[`is-${position}`, { moved: !!pos }]" :style="style" data-cmpkit-debug>
+    <section v-if="open" class="panel" :class="[openDown ? 'down' : 'up', alignRight ? 'right0' : 'left0']" role="dialog" aria-label="CMPKit debug">
       <header>
         <strong>CMPKit debug</strong>
         <span class="tag" :class="widget.ready ? 'ok' : 'bad'">{{ widget.ready ? 'ready' : 'not ready' }}</span>
+        <button v-if="pos" type="button" class="reset" @click="resetPosition">Reset position</button>
         <button type="button" class="x" aria-label="Close the CMPKit debug panel" @click="open = false">×</button>
       </header>
       <nav aria-label="CMPKit debug sections">
@@ -175,7 +241,7 @@ function resetConsent() {
       </div>
     </section>
 
-    <button type="button" class="fab" :aria-expanded="open" aria-label="Toggle the CMPKit debug panel" @click="toggle">
+    <button type="button" ref="fabEl" class="fab" :class="{ dragging }" :aria-expanded="open" aria-label="Toggle the CMPKit debug panel" @click="toggle" @pointerdown="onPointerDown" @pointermove="onPointerMove" @pointerup="onPointerUp" @pointercancel="onPointerUp">
       CMP<span v-if="warnings.length" class="dot" aria-hidden="true" />
     </button>
   </div>
@@ -183,10 +249,13 @@ function resetConsent() {
 
 <style scoped>
 .cmpkit-debug { position: fixed; bottom: 16px; z-index: 2147483000; font: 12px/1.45 system-ui, sans-serif; color: #e8e6e1; }
+.panel.up { bottom: calc(100% + 8px); } .panel.down { top: calc(100% + 8px); } .panel.left0 { left: 0; } .panel.right0 { right: 0; }
+.moved { right: auto; bottom: auto; }
+.reset { cursor: pointer; border: 1px solid #ffffff33; background: none; color: #e8e6e1; border-radius: 999px; padding: 2px 8px; font: inherit; font-size: 10px; white-space: nowrap; }
 .is-left { left: 16px; } .is-right { right: 16px; }
-.fab { position: relative; cursor: pointer; border: 1px solid #ffffff26; background: #1b1a17f2; color: #e8e6e1; border-radius: 999px; padding: 8px 14px; font: 600 11px/1 system-ui, sans-serif; letter-spacing: .14em; white-space: nowrap; }
+.fab { position: relative; cursor: grab; touch-action: none; user-select: none; border: 1px solid #ffffff26; background: #1b1a17f2; color: #e8e6e1; border-radius: 999px; padding: 8px 14px; font: 600 11px/1 system-ui, sans-serif; letter-spacing: .14em; white-space: nowrap; }
 .dot { position: absolute; top: -2px; right: -2px; width: 9px; height: 9px; border-radius: 50%; background: #c9a14a; }
-.panel { width: min(380px, calc(100vw - 32px)); max-height: min(70vh, 560px); display: flex; flex-direction: column; margin-bottom: 8px; background: #1b1a17f7; border: 1px solid #ffffff26; border-radius: 14px; box-shadow: 0 18px 50px #0008; overflow: hidden; }
+.panel { width: min(380px, calc(100vw - 32px)); max-height: min(70vh, 560px); display: flex; flex-direction: column; position: absolute; background: #1b1a17f7; border: 1px solid #ffffff26; border-radius: 14px; box-shadow: 0 18px 50px #0008; overflow: hidden; }
 header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #ffffff1a; }
 header strong { flex: 1; white-space: nowrap; }
 .tag { border-radius: 999px; padding: 2px 8px; font-size: 10px; white-space: nowrap; } .tag.ok { background: #3f6140; } .tag.bad { background: #9e3b2f; }
@@ -203,4 +272,5 @@ table { width: 100%; border-collapse: collapse; } th { text-align: left; color: 
 .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .actions button { cursor: pointer; border: 1px solid #ffffff33; background: #ffffff0d; color: inherit; border-radius: 8px; padding: 5px 10px; white-space: nowrap; font: inherit; }
 .log { list-style: none; margin: 0; padding: 0; }
+.fab.dragging { cursor: grabbing; }
 </style>

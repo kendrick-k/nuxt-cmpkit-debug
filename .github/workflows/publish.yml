@@ -1,0 +1,27 @@
+name: Publish
+# Publishes to npm with provenance when a GitHub release is published.
+# No npm token is stored: npm trusted publishing (OIDC) authorises this workflow, configured once with `npm trust github`.
+on:
+  release:
+    types: [published]
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: npm
+      - run: npm ci
+      - run: npm run dev:prepare
+      - run: npm test
+      - name: The release tag must match package.json
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: test "v$(node -p "require('./package.json').version")" = "$TAG"
+      - run: npm publish --access public --provenance

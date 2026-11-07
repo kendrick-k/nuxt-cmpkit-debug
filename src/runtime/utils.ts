@@ -70,3 +70,24 @@ export function splitByCmpkit(names: string[]): { cmpkit: string[], other: strin
   const cmpkit = names.filter(name => name.toLowerCase().startsWith('cmpkit'))
   return { cmpkit, other: names.filter(name => !cmpkit.includes(name)) }
 }
+
+export interface Point { x: number, y: number }
+export interface Size { width: number, height: number }
+
+/** Keeps a box of `size` fully inside the viewport, with a small margin. */
+export function clampPosition(pos: Point, size: Size, viewport: Size, margin = 8): Point {
+  const maxX = Math.max(margin, viewport.width - size.width - margin)
+  const maxY = Math.max(margin, viewport.height - size.height - margin)
+  return { x: Math.min(Math.max(pos.x, margin), maxX), y: Math.min(Math.max(pos.y, margin), maxY) }
+}
+
+/** Reads a stored position. Returns null for anything that is not two finite numbers. */
+export function parsePosition(raw: string | null): Point | null {
+  if (!raw) return null
+  try {
+    const value = JSON.parse(raw) as Partial<Point>
+    return typeof value.x === 'number' && typeof value.y === 'number' && Number.isFinite(value.x) && Number.isFinite(value.y) ? { x: value.x, y: value.y } : null
+  } catch {
+    return null
+  }
+}

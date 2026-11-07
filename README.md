@@ -13,8 +13,8 @@ A development-only debug panel for the [CMPKit](https://cmpkit.com) consent widg
 - **Loaded:** every third-party origin the page requests, with request count, size and when it started. Useful to check what runs before the visitor chooses.
 - **Consent:** the current consent state per category, plus buttons to open the settings, show the banner again or reset the stored choice, and a log of the changes since the page loaded.
 - **Storage:** the cookies set by CMPKit, the other cookies (names only) and the `localStorage` keys, with two buttons: **Reset CMPKit cookies** and **Reset all cookies** (a second click within 4 seconds confirms, no browser dialog). On localhost, "all cookies" also signs you out of your other local apps.
-- **Colour at a glance:** the CMP button is green when the setup is healthy, amber when there are only notices (for example other cookies), and red when something is broken (no script, empty key, script loaded twice, widget not ready).
-- **Movable:** drag the button anywhere; its position is remembered, and a **Reset position** button appears in the panel.
+- **Status dot at a glance:** a dot next to CMP is green when the setup is healthy, yellow when there are only notices (for example other cookies), and red when something is broken (no script, empty key, script loaded twice, widget not ready).
+- **Movable:** drag the handle on the left of the button (or focus it and use the arrow keys, Shift for bigger steps). The CMP part stays a normal button that opens the panel. The position is remembered, and a **Reset position** button appears in the panel.
 - **Localhost only.** The panel renders in development on `localhost`, `127.0.0.1` and `*.localhost`. In a production build the component is an empty stub: no panel code is shipped.
 - Reads only what the page already has (script tag, Performance API, cookies, `localStorage`, `window.CMPKit`). Nothing is sent anywhere, no telemetry.
 - No Tailwind and no other dependency besides Nuxt: the panel brings its own styles.

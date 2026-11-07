@@ -17,7 +17,7 @@ const position = (useRuntimeConfig().public.cmpkitDebug as { position?: string }
 const STORAGE_KEY = 'nuxt-cmpkit-debug:position'
 const pos = ref<Point | null>(null)
 const dragging = ref(false)
-const fabEl = ref<HTMLButtonElement | null>(null)
+const fabEl = ref<HTMLElement | null>(null)
 let drag: { startX: number, startY: number, originX: number, originY: number, moved: boolean } | null = null
 let suppressClick = false
 const viewport = () => ({ width: window.innerWidth, height: window.innerHeight })
@@ -46,7 +46,7 @@ function onPointerDown(e: PointerEvent) {
   if (!el) return
   const rect = el.getBoundingClientRect()
   drag = { startX: e.clientX, startY: e.clientY, originX: rect.left, originY: rect.top, moved: false }
-  try { el.setPointerCapture(e.pointerId) } catch { /* not supported */ }
+  try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId) } catch { /* not supported */ }
 }
 function onPointerMove(e: PointerEvent) {
   const el = fabEl.value
@@ -68,6 +68,17 @@ function onPointerUp() {
   savePosition()
   suppressClick = true
   setTimeout(() => { suppressClick = false }, 0)
+}
+function onGripKey(e: KeyboardEvent) {
+  const step = e.shiftKey ? 48 : 16
+  const delta = ({ ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] } as Record<string, [number, number]>)[e.key]
+  const el = fabEl.value
+  if (!delta || !el) return
+  e.preventDefault()
+  const rect = el.getBoundingClientRect()
+  const from = pos.value ?? { x: rect.left, y: rect.top }
+  pos.value = clampPosition({ x: from.x + delta[0], y: from.y + delta[1] }, { width: rect.width, height: rect.height }, viewport())
+  savePosition()
 }
 function onResize() {
   if (!pos.value || !fabEl.value) return
@@ -277,9 +288,12 @@ function resetConsent() {
       </div>
     </section>
 
-    <button type="button" ref="fabEl" class="fab" :class="[`lvl-${level}`, { dragging }]" :aria-expanded="open" aria-label="Toggle the CMPKit debug panel" @click="toggle" @pointerdown="onPointerDown" @pointermove="onPointerMove" @pointerup="onPointerUp" @pointercancel="onPointerUp">
-      CMP
-    </button>
+    <div ref="fabEl" class="dock" :class="{ dragging }">
+      <button type="button" class="grip" aria-label="Drag to move the button (arrow keys also work)" @pointerdown="onPointerDown" @pointermove="onPointerMove" @pointerup="onPointerUp" @pointercancel="onPointerUp" @keydown="onGripKey">
+        <svg width="10" height="16" viewBox="0 0 10 16" aria-hidden="true" fill="currentColor"><circle cx="2.5" cy="3" r="1.4" /><circle cx="7.5" cy="3" r="1.4" /><circle cx="2.5" cy="8" r="1.4" /><circle cx="7.5" cy="8" r="1.4" /><circle cx="2.5" cy="13" r="1.4" /><circle cx="7.5" cy="13" r="1.4" /></svg>
+      </button>
+      <button type="button" class="fab" :aria-expanded="open" :aria-label="`Toggle the CMPKit debug panel (status: ${level})`" @click="toggle"><span class="light" :class="`lvl-${level}`" aria-hidden="true" />CMP</button>
+    </div>
   </div>
 </template>
 
@@ -289,8 +303,13 @@ function resetConsent() {
 .moved { right: auto; bottom: auto; }
 .reset { cursor: pointer; border: 1px solid #ffffff33; background: none; color: #e8e6e1; border-radius: 999px; padding: 2px 8px; font: inherit; font-size: 10px; white-space: nowrap; }
 .is-left { left: 16px; } .is-right { right: 16px; }
-.fab { position: relative; cursor: grab; touch-action: none; user-select: none; border: 1px solid #ffffff26; background: #1b1a17f2; color: #e8e6e1; border-radius: 999px; padding: 8px 14px; font: 600 11px/1 system-ui, sans-serif; letter-spacing: .14em; white-space: nowrap; }
-.fab.lvl-ok { background: #3f6140; border-color: #6b9168; color: #fff; } .fab.lvl-warn { background: #8a6530; border-color: #c9a14a; color: #fff; } .fab.lvl-bad { background: #9e3b2f; border-color: #c46a5c; color: #fff; }
+.dock { position: relative; display: inline-flex; align-items: center; border: 1px solid #ffffff26; background: #1b1a17f2; color: #e8e6e1; border-radius: 999px; }
+.grip { cursor: grab; touch-action: none; user-select: none; display: inline-flex; align-items: center; border: 0; background: none; color: inherit; opacity: .65; padding: 8px 4px 8px 12px; border-radius: 999px 0 0 999px; }
+.grip:hover, .grip:focus-visible { opacity: 1; }
+.dock.dragging .grip { cursor: grabbing; }
+.fab { cursor: pointer; border: 0; background: none; color: inherit; border-radius: 0 999px 999px 0; padding: 8px 14px 8px 6px; font: 600 11px/1 system-ui, sans-serif; letter-spacing: .14em; white-space: nowrap; }
+.light { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; vertical-align: 1px; }
+.light.lvl-ok { background: #5fbf6a; box-shadow: 0 0 0 3px #5fbf6a33; } .light.lvl-warn { background: #e0b341; box-shadow: 0 0 0 3px #e0b34133; } .light.lvl-bad { background: #e5584a; box-shadow: 0 0 0 3px #e5584a33; }
 .actions button:disabled { opacity: .45; cursor: default; } .actions button.danger { border-color: #c46a5c; color: #f0b3a9; }
 .panel { width: min(380px, calc(100vw - 32px)); max-height: min(70vh, 560px); display: flex; flex-direction: column; position: absolute; background: #1b1a17f7; border: 1px solid #ffffff26; border-radius: 14px; box-shadow: 0 18px 50px #0008; overflow: hidden; }
 header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #ffffff1a; }
@@ -309,5 +328,4 @@ table { width: 100%; border-collapse: collapse; } th { text-align: left; color: 
 .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .actions button { cursor: pointer; border: 1px solid #ffffff33; background: #ffffff0d; color: inherit; border-radius: 8px; padding: 5px 10px; white-space: nowrap; font: inherit; }
 .log { list-style: none; margin: 0; padding: 0; }
-.fab.dragging { cursor: grabbing; }
 </style>

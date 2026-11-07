@@ -1,0 +1,28 @@
+{
+  "name": "nuxt-cmpkit-debug",
+  "version": "0.1.0",
+  "description": "Development-only debug panel for the CMPKit consent widget on localhost: what is configured, what loads and how fast, consent state, cookies and storage.",
+  "license": "MIT",
+  "type": "module",
+  "keywords": ["nuxt", "nuxt-module", "cmpkit", "cmp", "consent", "cookie-banner", "debug", "devtools", "gdpr"],
+  "repository": { "type": "git", "url": "git+https://github.com/kendrick-k/nuxt-cmpkit-debug.git" },
+  "exports": { ".": { "types": "./dist/types.d.mts", "import": "./dist/module.mjs" } },
+  "main": "./dist/module.mjs",
+  "typesVersions": { "*": { ".": ["./dist/types.d.mts"] } },
+  "files": ["dist"],
+  "scripts": {
+    "prepack": "nuxt-module-build build",
+    "dev": "nuxi dev playground",
+    "dev:build": "nuxi build playground",
+    "dev:prepare": "nuxt-module-build build --stub && nuxt-module-build prepare && nuxi prepare playground",
+    "test": "node --experimental-strip-types --test test/*.test.ts"
+  },
+  "dependencies": { "@nuxt/kit": "^4.0.0" },
+  "devDependencies": {
+    "@nuxt/module-builder": "^1.0.0",
+    "nuxt": "^4.1.0",
+    "typescript": "^5.7.0",
+    "vue-tsc": "^3.3.14"
+  },
+  "peerDependencies": { "nuxt": "^3.15.0 || ^4.0.0" }
+}

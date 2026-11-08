@@ -329,6 +329,8 @@ table { width: 100%; border-collapse: collapse; } th { text-align: left; color: 
 .actions button { cursor: pointer; border: 1px solid #ffffff33; background: #ffffff0d; color: inherit; border-radius: 8px; padding: 5px 10px; white-space: nowrap; font: inherit; }
 .log { list-style: none; margin: 0; padding: 0; }
 .panel, .panel * { box-sizing: border-box; }
+/* Host sites often ship `* { max-width: 100% }` (CSS resets): inside the shrink-wrapped dock that capped the panel at the dock width (~93px). */
+.panel { max-width: calc(100vw - 16px); }
 .body { min-width: 0; overscroll-behavior: contain; }
 nav { overflow-x: auto; }
 header { flex-wrap: wrap; }

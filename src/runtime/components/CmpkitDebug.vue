@@ -328,4 +328,16 @@ table { width: 100%; border-collapse: collapse; } th { text-align: left; color: 
 .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .actions button { cursor: pointer; border: 1px solid #ffffff33; background: #ffffff0d; color: inherit; border-radius: 8px; padding: 5px 10px; white-space: nowrap; font: inherit; }
 .log { list-style: none; margin: 0; padding: 0; }
+.panel, .panel * { box-sizing: border-box; }
+.body { min-width: 0; overscroll-behavior: contain; }
+nav { overflow-x: auto; }
+header { flex-wrap: wrap; }
+/* Narrow screens: the panel is a sheet pinned to the viewport edges (never clipped, whatever the dock position). */
+@media (max-width: 520px) {
+  .panel, .panel.up, .panel.down, .panel.left0, .panel.right0 { position: fixed; left: 8px; right: 8px; width: auto; max-height: calc(100dvh - 88px); }
+  .panel.up { top: auto; bottom: 64px; }
+  .panel.down { bottom: auto; top: 64px; }
+  dl { grid-template-columns: 1fr; gap: 0; }
+  dt { margin-top: 6px; }
+}
 </style>

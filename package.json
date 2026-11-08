@@ -1,6 +1,6 @@
 {
   "name": "nuxt-cmpkit-debug",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Development-only debug panel for the CMPKit consent widget on localhost: what is configured, what loads and how fast, consent state, cookies and storage.",
   "license": "MIT",
   "type": "module",
